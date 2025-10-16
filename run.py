@@ -46,11 +46,17 @@ unweighted_adjacency = symmetrize_matrix(unweighted_adjacency)
 # vertices_weight_2 = -np.array([0, 3.2, 1, 3.3, 7, 3, 5, 3.4, 2, 3.5, 2.5])
 
 # Symmetric weights
-vertices_weight_1 = -np.array([0, 3.2, 0, 3.2, 6, 3, 5, 3.2, 0, 3.2, 0])
-vertices_weight_2 = -np.array([0, 3.2, 0, 3.2, 7, 3, 5, 3.2, 0, 3.2, 0])
+# vertices_weight_1 = -np.array([0, 3.2, 0, 3.2, 6, 3, 5, 3.2, 0, 3.2, 0])
+# vertices_weight_2 = -np.array([0, 3.2, 0, 3.2, 7, 3, 5, 3.2, 0, 3.2, 0])
 
+vertices_weight_1 = np.array([0, 3.2, 1, 3.3, 6, 3, 5, 3.4, 2, 3.5, 2.5])
+vertices_weight_2 = np.array([0, 3.2, 1, 3.3, 4, 3, 5, 3.4, 2, 3.5, 2.5])
 
 # Build the weighted graph
+# weighted_adjacency = popoluate_adjacency_matrix(unweighted_adjacency, vertices_weight_1)
+# weighted_adjacency2 = popoluate_adjacency_matrix(unweighted_adjacency, vertices_weight_2)
+
+# Test with unweighted graph
 weighted_adjacency = popoluate_adjacency_matrix(unweighted_adjacency, vertices_weight_1)
 weighted_adjacency2 = popoluate_adjacency_matrix(unweighted_adjacency, vertices_weight_2)
 
@@ -158,7 +164,7 @@ cosine_min_gr2      = cdist(hks1_min_gr2,       hks2_min_gr2,       metric="cosi
 cosine_saddle_gr1   = cdist(hks1_saddle_gr1,    hks2_saddle_gr1,    metric="cosine")
 cosine_saddle_gr2   = cdist(hks1_saddle_gr2,    hks2_saddle_gr2,    metric="cosine")
 
-save_path = "SimpleCase1_Symm_AllSaddles/"
+save_path = "SimpleCase1_DecreaseMax/"
 
 # Plot heatmap
 plt.figure(figsize=(8, 6))

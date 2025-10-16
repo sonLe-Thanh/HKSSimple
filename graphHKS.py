@@ -13,8 +13,8 @@ def compute_laplacian_matrix(A, is_nomalized = False):
         L: np.array - Laplacian matrix of G of size n x n
     """
     # Compute the matrix D 
+    # Summing over rows
     diag_entries = A.sum(axis=1)
-    
 
     if not is_nomalized:
         D = np.diag(diag_entries)
