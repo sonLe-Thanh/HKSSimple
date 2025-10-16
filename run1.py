@@ -50,9 +50,9 @@ for other_weight in other_weights:
     # Draw the values
 
 
-    all_hks_0 = np.array(all_hks_0)
-    all_hks_1 = np.array(all_hks_1)
-    all_hks_2 = np.array(all_hks_2)
+    all_hks_0 = np.array(all_hks_0[::-1])
+    all_hks_1 = np.array(all_hks_1[::-1])
+    all_hks_2 = np.array(all_hks_2[::-1])
 
     # print(np.linalg.norm(all_hks_0 - all_hks_2, ord=2))
 
@@ -104,3 +104,15 @@ for other_weight in other_weights:
     # plt.tight_layout()
     plt.savefig(save_path+f"otherWeight_{other_weight}.pdf", format="pdf")
     # plt.show()
+
+
+# Weight effects
+# Observation: The middle nodes get some heat, but basiscally unchange for different weight values 
+# => It won't matter much if we add points that are part of the separatrices, only the ones with connectivity \neq 2 seems to be different (!)
+
+# The heat moves away from the edges with lower heat values, and concentrate on the vertices connecting to the edges with higher heat values.
+
+
+# Connectivity effects
+# Increasing the connectivity makes the heat slower to accumulate to the center (or vice versa).
+# The other nodes basically lose the heat very fast.
