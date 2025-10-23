@@ -85,8 +85,6 @@ def read_graph_info(in_file):
             # Add to the result
             results.append([sepa_length, first_node, second_node])
 
-    for node in all_nodes:
-        print(node)
 
     # Also keep track of the number of nodes in the graph
     return results, idx_graph_counter, minima_idx, saddle_idx, maxima_idx

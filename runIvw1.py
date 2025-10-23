@@ -17,9 +17,10 @@ t_hks = np.logspace(1, 10, 100)
 
 is_normalized_Laplacian = True
 is_normalize_hks = True
+is_normalize_vectors = False
 
 use_sepa_length = False
-
+sigma = 0.7
 
 # Get the adjacency matrix
 adj_mat_t1, minima_idx1, saddle_idx1, maxima_idx1 = create_adj_matrix_from_ivw(file1, use_sepa_length)
@@ -30,12 +31,19 @@ num_eigen = adj_mat_t1.shape[0] + 1
 eigen_val1, eigen_vec1, laplacian1 = compute_eigen_laplacian(adj_mat_t1, num_eigen, is_normalized_Laplacian)
 eigen_val2, eigen_vec2, laplacian2 = compute_eigen_laplacian(adj_mat_t2, num_eigen, is_normalized_Laplacian)
 
-# Compute the hks
-hks1 = compute_graph_hks(eigen_val1, eigen_vec1, t_hks, is_normalize_hks)
-hks2 = compute_graph_hks(eigen_val2, eigen_vec2, t_hks, is_normalize_hks)
+# print(eigen_vec1.shape)
+# print(eigen_val1.shape)
 
-# minima_idx1.pop()
-# maxima_idx2.pop(1)
+# Compute the hks
+hks1 = compute_graph_hks(eigen_val1, eigen_vec1, t_hks, is_normalize_hks, is_normalize_vectors)
+hks2 = compute_graph_hks(eigen_val2, eigen_vec2, t_hks, is_normalize_hks, is_normalize_vectors)
+# 
+# Compute the wks
+# hks1 = compute_graph_wks(eigen_val1, eigen_vec1, t_hks, sigma, is_normalize_hks, is_normalize_vectors)
+# hks2 = compute_graph_wks(eigen_val2, eigen_vec2, t_hks, sigma, is_normalize_hks, is_normalize_vectors)
+
+# minima_idx1.pop(2)
+# minima_idx2.pop(2)
 
 
 # We want to only compare the critical points with the same type
@@ -99,35 +107,39 @@ plt.title('Pairwise Distances Heatmap')
 plt.show()
 
 
-plt.figure(figsize=(8, 6))
-plt.imshow(dist_min_cosine, cmap='viridis', interpolation='nearest')
-plt.colorbar(label='Euclidean distance of HKS - Min')
-plt.xlabel('Graph 2')
-plt.ylabel('Graph 1')
-plt.title('Pairwise Distances Heatmap')
-# plt.xticks(range(11))
-# plt.yticks(range(11))
-plt.show()
+# plt.figure(figsize=(8, 6))
+# plt.imshow(dist_min_cosine, cmap='viridis', interpolation='nearest')
+# plt.colorbar(label='Cosine distance of HKS - Min')
+# plt.xlabel('Graph 2')
+# plt.ylabel('Graph 1')
+# plt.title('Pairwise Distances Heatmap')
+# # plt.xticks(range(11))
+# # plt.yticks(range(11))
+# plt.show()
 
 
-plt.figure(figsize=(8, 6))
-plt.imshow(dist_saddle_cosine, cmap='viridis', interpolation='nearest')
-plt.colorbar(label='Euclidean distance of HKS - Saddles')
-plt.xlabel('Graph 2')
-plt.ylabel('Graph 1')
-plt.title('Pairwise Distances Heatmap')
-# plt.xticks(range(11))
-# plt.yticks(range(11))
-plt.show()
+# plt.figure(figsize=(8, 6))
+# plt.imshow(dist_saddle_cosine, cmap='viridis', interpolation='nearest')
+# plt.colorbar(label='Cosine distance of HKS - Saddles')
+# plt.xlabel('Graph 2')
+# plt.ylabel('Graph 1')
+# plt.title('Pairwise Distances Heatmap')
+# # plt.xticks(range(11))
+# # plt.yticks(range(11))
+# plt.show()
 
 
 
-plt.figure(figsize=(8, 6))
-plt.imshow(dist_max_cosine, cmap='viridis', interpolation='nearest')
-plt.colorbar(label='Euclidean distance of HKS - Max')
-plt.xlabel('Graph 2')
-plt.ylabel('Graph 1')
-plt.title('Pairwise Distances Heatmap')
-# plt.xticks(range(11))
-# plt.yticks(range(11))
-plt.show()
+# plt.figure(figsize=(8, 6))
+# plt.imshow(dist_max_cosine, cmap='viridis', interpolation='nearest')
+# plt.colorbar(label='Consine distance of HKS - Max')
+# plt.xlabel('Graph 2')
+# plt.ylabel('Graph 1')
+# plt.title('Pairwise Distances Heatmap')
+# # plt.xticks(range(11))
+# # plt.yticks(range(11))
+# plt.show()
+
+
+
+# We may want a proper optimization scheme, the normal distance only showed some sights

@@ -54,7 +54,7 @@ def compute_eigen_laplacian(A, num_eigen, is_nomalized = False):
     return eigenvals, eigenvectors, laplacian
 
 
-def compute_graph_hks(eigenvals, eigenvectors, t_list, is_normlized = False):
+def compute_graph_hks(eigenvals, eigenvectors, t_list, is_normalized_kernel = False, is_normalized_vectors = False):
     """
     Compute the heat kernel signature, given eigenvalues, eigenvectors, and the scaling parameter t
     The discrete HKS is given as 
@@ -66,7 +66,8 @@ def compute_graph_hks(eigenvals, eigenvectors, t_list, is_normlized = False):
         eigenvals : np.array - eigenvalues of the Laplacian
         eigenvectors : np.array - corresponding eigenvectors of the Laplacian
         t_list: np.array - scaling variables
-        is_normalized: do we want to normalized the HKS with the heat trace
+        is_normalized_kernel: do we want to normalized the HKS with the heat trace
+        is_normalized_vectors: do we want to normalized the eigenvectors
 
     Output:
         hks: np.array
@@ -77,13 +78,57 @@ def compute_graph_hks(eigenvals, eigenvectors, t_list, is_normlized = False):
 
     for idx, t in enumerate(t_list):
         exp_term = np.exp(-t * eigenvals)
-        hks[:, idx] = (eigenvectors ** 2) @ exp_term
+        if is_normalized_vectors:
+            eigenvectors_norm = eigenvectors / np.linalg.norm(eigenvectors, axis=0, keepdims=True)
+            hks[:, idx] = (eigenvectors_norm ** 2) @ exp_term
+        else:
+            hks[:, idx] = (eigenvectors ** 2) @ exp_term
 
-        if is_normlized:
+        if is_normalized_kernel:
             heat_trace = np.sum(exp_term)
             hks[:, idx] /= heat_trace
-
+    # Each column correcspond to the hks at that i-th vertex
     return hks
+
+
+def compute_graph_wks(eigenvals, eigenvectors, t_list, sigma, is_normalized_kernel = False, is_normalized_vectors = False):
+    """
+    Compute the wave kernel signature, given eigenvalues, eigenvectors, and the scaling parameter t
+    The discrete HKS is given as 
+        HKS(t,x) = \Sigma_{i=1}^k e^{-(t - log \lamba_k)^2 / (2 \sigma^2)} v_i^2,
+        where \lambda_i and v_i are the corresponding eigenvalues and eigenvectors of the Laplacian
+    
+
+    Input:
+        eigenvals : np.array - eigenvalues of the Laplacian
+        eigenvectors : np.array - corresponding eigenvectors of the Laplacian
+        t_list: np.array - scaling variables
+        sigma: value: the value sigma for wave kernel signature
+        is_normalized_value: do we want to normalized the WKS with the 'wave trace'
+        is_normalized_vectors: do we want to normalized the eigenvectors
+
+    Output:
+        hks: np.array
+    """
+
+
+    num_vertices = eigenvectors.shape[0]
+    wks = np.zeros((num_vertices, len(t_list)))
+
+    for idx, t in enumerate(t_list):
+        exp_term = np.exp(-(t  - np.log(eigenvals)) ** 2 / (2 * sigma ** 2))
+
+        if is_normalized_vectors:
+            eigenvectors_norm = eigenvectors / np.linalg.norm(eigenvectors, axis=0, keepdims=True)
+            wks[:, idx] = (eigenvectors_norm ** 2) @ exp_term
+        else:    
+            wks[:, idx] = (eigenvectors ** 2) @ exp_term
+
+        if is_normalized_kernel:
+            heat_trace = np.sum(exp_term)
+            wks[:, idx] /= heat_trace
+
+    return wks
 
 
 def compute_diffused_graph_hks(eigenvals, eigenvectors, scalar_function, t_list, is_normlized = False):
