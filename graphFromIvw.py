@@ -31,7 +31,7 @@ def read_graph_info(in_file):
             sepa_length = int(parts[0])
             
             # After that we have the node info
-            first_node_info = parts[1].split(" ")
+            first_node_info = parts[2].split(" ")
             first_node = IvwCriticalPoints(int(first_node_info[0]), float(first_node_info[1]), int(first_node_info[2]))
             # Set the correct graph index
             if first_node.idx_wpc not in all_idx_wpc:
@@ -54,10 +54,10 @@ def read_graph_info(in_file):
             first_node.idx_graph = all_idx_wpc[first_node.idx_wpc]
 
             # Update the positions
-            first_node_pos = parts[3].split(" ")
+            first_node_pos = parts[4].split(" ")
             first_node.pos = np.array([float(first_node_pos[0]), float(first_node_pos[1]), float(first_node_pos[2])])
 
-            second_node_info = parts[2].split(" ")
+            second_node_info = parts[3].split(" ")
             second_node = IvwCriticalPoints(int(second_node_info[0]), float(second_node_info[1]), int(second_node_info[2]))
             # Set the correct graph index
             if second_node.idx_wpc not in all_idx_wpc:
@@ -79,7 +79,7 @@ def read_graph_info(in_file):
             second_node.idx_graph = all_idx_wpc[second_node.idx_wpc]
 
             # Update the positions
-            second_node_pos = parts[4].split(" ")
+            second_node_pos = parts[5].split(" ")
             second_node.pos = np.array([float(second_node_pos[0]), float(second_node_pos[1]), float(second_node_pos[2])])
 
             # Add to the result
