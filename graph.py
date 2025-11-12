@@ -2,11 +2,11 @@
 
 import numpy as np
 from scipy.sparse.linalg import eigsh
-from scipy.spatial.distance import cityblock, euclidean, minkowski
 
-import cvxpy as cp
 import gurobipy as gp
 from gurobipy import GRB
+import matplotlib.pyplot as plt
+
 
 class Vertex:
     def __init__(self, idx, node_type, val):
@@ -204,7 +204,7 @@ class Graph:
             self.laplacian = identity_mat - D_sqrt_inv @ self.adj_mat @ D_sqrt_inv
 
 
-    def compute_eigen_laplacian(self, num_eigen = 100):
+    def compute_eigen_laplacian(self, num_eigen = 100, is_normalized=True):
         """
         Compute the eigenvalues and eigen vectors of the Laplacian matrix of the Graph G(V,E)
 
@@ -218,7 +218,7 @@ class Graph:
 
         if self.laplacian is None:
             # Use normalized Laplacian on default
-            self.compute_graph_laplacian(True)
+            self.compute_graph_laplacian(is_normalized)
 
         num_eigen_calc = min(self.adj_mat.shape[0], num_eigen)
         # The i-th value containing the eigen vals and eigenvecs of i-th vertices, resp.
@@ -328,159 +328,171 @@ class Graph:
         return eigen_vec_prod @ exp_terms
 
 
+    def compute_graph_adalfs(self, t_max, num_sample=50, c_h=10):
+        # Implementation of adaLFS 
+        # Given a list of eigenvalues of a Laplacian of a graph
+        # We need to optimize the signature h(|t-\lambda_i|) such that 
+        # It minimize some gap
+
+        # Given the time variable t_max, we only need to define h on [0, t_max]
+        # Assume that we have h evenly sampled from [0, t_max]
+        # To get h = [h_0,...,h_N]^\top
+        # \delta h = t_max/N
+        # h' = [(h_1 - h_0)/\delta h,..., (h_N - h_{N-1})/\delta h]^\top.
+        # h'' = [(h_2 - h_0)/\delta h,...,(h_N - h_{N-2})/\delta h]^\top.
+
+        # Let h_j be the shifted version
+
+        # Problem to minimize 
+        # min 
+        #           \mu \sum_{t=0}^N \max(\hh_{1, t},\ldots,\hh_{k,t}) + \sum_{t=0}^N \max(\hh_{1,t}',\ldots,\hh_{k,t}')
+        # s.t.      \hh_i \geq 0,\\
+        #           \hh_i' \leq 0,\\
+        #           -c_h \leq \hh_i'' \leq 0,\\
+        #           h_0 = 1,\\
+        #           h_N = 0.
+        # \mu = 2 / (avg \lambda_i)
+
+        if self.eigenvals is None or self.eigenvecs is None:
+            self.compute_eigen_laplacian(True)
+
+        # Calculate the mu value
+        mu = 2 / np.mean(np.diff(self.eigenvals))
+        # Sample step
+        delta_h = t_max / num_sample
+
+        # Compute eig_shift
+        eig_shift = [int(round(val/delta_h)) for val in self.eigenvals]
+
+        # Number of lambdas
+        k = len(self.eigenvals)
+        # Define GRB model
+        model = gp.Model("adaLFS")
+        model.Params.OutputFlag = 1
+
+        # Variables
+        h = model.addVars(num_sample + 1, lb=0.0, name="h") # Sample h
+        h_p = model.addVars(num_sample, lb=-GRB.INFINITY, name="h_prime") # h'
+        h_pp = model.addVars(num_sample - 1, lb=-GRB.INFINITY, name="h_prime_prime") # h''
+
+        # Explicit shifted variables
+        h_shifted       = model.addVars(k,  num_sample + 1, lb=0.0, name="h_shifted") # Shifted h
+        h_p_shifted     = model.addVars(k,  num_sample, lb=-GRB.INFINITY, name="h_prime_shifted") # Shifted h'
+        h_pp_shifted    = model.addVars(k,  num_sample - 1, lb=-GRB.INFINITY, name="h_prime_prime_shifted") # Shifted h''
+
+        # Element-wise max variables
+        max_h = model.addVars(num_sample + 1, lb=0.0, name="max_h") # max_h
+        max_h_p = model.addVars(num_sample, lb=-GRB.INFINITY, name="max_h_prime") # max h'
 
 
-def create_compability_matrix(graph1 : Graph, graph2 : Graph, 
-                              t_list, is_normalized_kernel_hks, is_normalized_vector_hks,
-                              use_physical_constraint = True
-                              ):
+        # Constraints
+        # Boundary condition
+        model.addConstr(h[0] == 1.0, name="h_0_fixed")
+        model.addConstr(h[num_sample] == 0.0, name="h_N_fixed")
 
-    # Given two graphs as above, compute the compability matrix
-    num_ver1 = len(graph1.vertices_list)
-    num_ver2 = len(graph2.vertices_list)
+        # First derivative
+        for i in range(num_sample):
+            model.addConstr(h_p[i] == (h[i + 1] - h[i]) / delta_h, name=f"h_prime_def_{i}") # First derivative definition
+            # model.addConstr(h_p[i] <= 0.0, name=f"h_prime_sign_{i}") # h decreasing constraint
 
-    comp_mat = 10000000000 * np.ones((num_ver1 * num_ver2, num_ver1 * num_ver2))
+        # Second derivative
+        for i in range(num_sample - 1):
+            model.addConstr(h_pp[i] == (h[i + 2] - h[i])/ (delta_h ** 2), name=f"h_prime_prime_def_{i}") # Second derivative defintion
+            # model.addConstr(h_pp[i] >= -c_h, name=f"h_prime_prime_lb_{i}")  # Smooth constraint
+            # model.addConstr(h_pp[i] <= 0, name=f"h_prime_prime_ub_{i}") # Smooth constraint
 
-    # Compute the hks of these matrix
-    hks1 = graph1.hks
-    hks2 = graph2.hks
-
-    # Start filling this matrix
-    for idx_i_g1 in range(num_ver1):
-        for idx_j_g1 in range(num_ver1):
-            for idx_a_g2 in range(num_ver2):
-                for idx_b_g2 in range(num_ver2):
-
-                    # Convert to the correct index
-                    idx_ia = idx_a_g2 * num_ver1 + idx_i_g1
-                    idx_jb = idx_b_g2 * num_ver2 + idx_j_g1
-            
-                    # First order condition
-                    # Only calcultate if they are of the same types
-                    #  
-                    if idx_i_g1 == idx_j_g1 and idx_a_g2 == idx_b_g2 and graph1.get_node(idx_i_g1).node_type == graph2.get_node(idx_a_g2).node_type:
+        # Shifted constraints for every h
+        for idx, shift in enumerate(eig_shift):
+            for t in range(num_sample + 1):
+                h_shift_idx = t - shift
+                if 0 <= h_shift_idx <= num_sample:
+                    model.addConstr(h_shifted[idx, t] == h[h_shift_idx])
+                else:
+                    model.addConstr(h_shifted[idx, t] == 0)
                 
-                        # We get the hks at these points
-                        hks_i = hks1[idx_i_g1]
-                        hks_a = hks2[idx_a_g2]
-                        # HKS distance
-                        diff_hks = minkowski(hks_i, hks_a, 1)
-                        comp_mat[idx_ia, idx_jb] = diff_hks
+                model.addConstr(h_shifted[idx, t] >= 0)
 
-                        if use_physical_constraint:
-                            # We want to apply the physical constraint as well
-                            point1 = graph1.get_node(idx_i_g1)
-                            point2 = graph2.get_node(idx_a_g2)
+            # Shifted for every h'
+            for t in range(num_sample):
+                h_shift_idx = t - shift
+                if 0 <= h_shift_idx <= num_sample - 1:
+                    model.addConstr(h_p_shifted[idx, t] == h_p[h_shift_idx])
+                else:
+                    model.addConstr(h_p_shifted[idx, t] == 0)
 
-                            # Compute the euclidean distance between 2 points
-                            e_dist = euclidean(point1.pos, point2.pos)
-                            comp_mat[idx_ia, idx_jb] += e_dist
+                model.addConstr(h_p_shifted[idx, t] <= 0)
+            
+            # Shifted for every h''
+            for t in range(num_sample - 1):
+                h_shift_idx = t - shift
+                if 0 <= h_shift_idx <= num_sample - 2:
+                    model.addConstr(h_pp_shifted[idx, t] == h_pp[h_shift_idx])
+                else:
+                    model.addConstr(h_pp_shifted[idx, t] == 0)
 
-                    # Second order condition 
-                    if idx_i_g1 != idx_j_g1 and idx_a_g2 != idx_b_g2:
-                        # Differences between the heat kernel
+                model.addConstr(h_pp_shifted[idx, t] >= -c_h)
+                model.addConstr(h_pp_shifted[idx, t] <= c_h)
 
-                        heat_edge_g1 = graph1.compute_graph_heat_kernel(t_list, idx_i_g1, idx_j_g1, is_normalized_kernel_hks, is_normalized_vector_hks)
-                        heat_edge_g2 = graph2.compute_graph_heat_kernel(t_list, idx_a_g2, idx_b_g2, is_normalized_kernel_hks, is_normalized_vector_hks)
+        # Maxima auxilary constrains
+        for t in range(num_sample + 1):
+            for idx in range(k):
+                model.addConstr(max_h[t] >= h_shifted[idx, t])
+        
+        for t in range(num_sample):
+            for idx in range(k):
+                model.addConstr(max_h_p[t] >= h_p_shifted[idx, t])
 
-                        diff_heat = minkowski(heat_edge_g1, heat_edge_g2)
-                        comp_mat[idx_ia, idx_jb] = diff_heat
-    return comp_mat
+        # # Element-wise shift for max
+        # # h-shifted
+        # for t in range(num_sample + 1):
+        #     for idx, shift in enumerate(eig_shift):
+        #         h_shift_idx = abs(t - shift)
+        #         if 0 <= h_shift_idx <= num_sample:
+        #             model.addConstr(max_h[t] >= h[h_shift_idx], name=f"max_h_def_{t}_{idx}") # Defintion of max shifted
+        #         else:
+        #             model.addConstr(max_h[t] == 0, name=f"max_h_def_{t}_{idx}") # 0 -padding
+        # # h'-shifted
+        # for t in range(num_sample):
+        #     for idx, shift in enumerate(eig_shift):
+        #         h_prime_shift_idx = abs(t - shift)
+        #         if 0 <= h_prime_shift_idx <= num_sample - 1:
+        #             model.addConstr(max_h_p[t] >= h_p[h_prime_shift_idx], name=f"max_h_prime_def_{t}_{idx}") # Definition of max shifted
+        #         else:
+        #             model.addConstr(max_h_p[t] == 0, name=f"max_h_prime_def_{t}_{idx}") # 0-padding
+        
+        # Objective function
+        model.setObjective(mu * gp.quicksum(max_h[t] for t in range(num_sample + 1)) + gp.quicksum(max_h_p[t] for t in range(num_sample)), GRB.MINIMIZE)
 
+        # Optimized
+        model.optimize()
 
-def compute_matching(graph1 : Graph, graph2 : Graph, compatibility_mat):
-    # Given the compatibility matrix, compute the optimal matching of nodes
+        # Check the result
+        if model.Status == GRB.OPTIMAL:
+            print("Optimal objective found", model.ObjVal)
+            h_val = np.array([h[i].X for i in range(num_sample + 1)])
+            x = np.linspace(0, t_max, num_sample + 1)
+            plt.figure(figsize=(6,4))
+            plt.plot(x, h_val,label='Optimized h(t)')
+            plt.xlabel('t (input of h)')
+            plt.ylabel('h(t)')
+            plt.title('Optimized Spectral Kernel h(t)')
+            plt.grid(True)
+            plt.legend()
+            plt.show()
+            # for v in model.getVars():
+            #     print(f"{v.VarName}: LB={v.LB}, UB={v.UB}, Type={v.VType}, Value={v.X}")
 
-    num_ver1 = len(graph1.vertices_list)
-    num_ver2 = len(graph2.vertices_list)
-
-    x = cp.Variable(num_ver1 * num_ver2, boolean=True)
-    object_func = cp.Minimize(cp.quad_form(x, compatibility_mat))
-
-    # Constraints
-    # Build one to one mapping constraints
-    A1 = np.zeros((num_ver1, num_ver1 * num_ver2))
-    for i in range(num_ver1):
-        for j in range(num_ver2):
-            k = i * num_ver2 + j
-            A1[i, k] = 1
-
-    b1 = np.ones(num_ver1)
-
-    # Each node in G2 match exactly to one in G1
-    A2 = np.zeros((num_ver2, num_ver1 * num_ver2))
-    for j in range(num_ver2):
-        for i in range(num_ver1):
-            k = i * num_ver2 + j
-            A2[j, k] = 1
-    b2 = np.ones(num_ver2)
-
-    # Combine both constraints
-    A = np.vstack((A1, A2))
-    b = np.hstack((b1, b2))
-    constraints = [A @ x <= b]
-
-    # Solve
-    problem = cp.Problem(objective=object_func, constraints=constraints)
-    problem.solve(solver=cp.GUROBI, qcp=True, verbose=True)
-
-    # Get the solution
-    x_opt = np.round(x.value).astype(int)
-    # Reshape to get the mapping
-    map_opt = x_opt.reshape((num_ver1, num_ver2))
-
-    return map_opt
-
-
-def interpret_matching(mapping):
-    matching = {node_g1 : np.argmax(mapping[node_g1]) for node_g1 in range(mapping.shape[0])}
-    for start_node in matching:
-        print(f"{start_node} of graph 1 to {matching[start_node]} of graph 2")
-
-
-def compute_matching_grb(graph1: Graph, graph2: Graph, compatibility_mat):
-     # Given the compatibility matrix, compute the optimal matching of nodes
-
-    num_ver1 = len(graph1.vertices_list)
-    num_ver2 = len(graph2.vertices_list)
-
-    model = gp.Model("MSC Matching")
-
-    # Var
-    x = model.addMVar(shape=num_ver1 * num_ver2, vtype=GRB.BINARY, name="x")
-
-    # Constraints
-    # Build one to one mapping constraints
-    A1 = np.zeros((num_ver1, num_ver1 * num_ver2))
-    for i in range(num_ver1):
-        for j in range(num_ver2):
-            k = i * num_ver2 + j
-            A1[i, k] = 1
-
-    b1 = np.ones(num_ver1)
-
-    # Each node in G2 match exactly to one in G1
-    A2 = np.zeros((num_ver2, num_ver1 * num_ver2))
-    for j in range(num_ver2):
-        for i in range(num_ver1):
-            k = i * num_ver2 + j
-            A2[j, k] = 1
-    b2 = np.ones(num_ver2)
-
-    A = np.vstack((A1, A2))
-    b = np.ones(A.shape[0])
-
-    # Add constraints
-    model.addMConstr(A, x, GRB.EQUAL, b)
-
-    object_funct = x.T @ compatibility_mat @ x
-    model.setObjective(object_funct, GRB.MINIMIZE)
-
-    # Optimize
-    model.optimize()
-
-    # Solution
-    x_opt = x.X
-    # Reshape
-    map_opt = x_opt.reshape((num_ver1, num_ver2))
-    return map_opt
+            # for c in model.getConstrs():
+            #     print(f"{c.ConstrName}: {c.Sense} RHS={c.RHS}")
+        else:
+            print("Model is infeasible. Computing IIS to diagnose conflicting constraints...")
+            model.computeIIS()
+            # write IIS to file and print a short summary
+            model.write("model_iis.ilp")
+            print("IIS written to model_iis.ilp. The following constraints are in the IIS:")
+            for c in model.getConstrs():
+                if c.IISConstr:
+                    print("  ", c.ConstrName)
+            print("You can inspect model_iis.ilp in a text editor to see the minimal infeasible subsystem.")
+        # else:
+        #     print("Optimization ended with status:", model.status)
